@@ -2,6 +2,7 @@ import httpx
 from valkey.asyncio import Valkey
 
 from api.models import StepEvent
+from config import PREFLIGHT_TIMEOUT
 from worker.helpers import publish
 
 
@@ -12,7 +13,7 @@ async def preflight(vk: Valkey, job_id: str, url: str) -> bool:
         message="Checking MIME type...",
     ))
     try:
-        async with httpx.AsyncClient(follow_redirects=True, timeout=10) as client:
+        async with httpx.AsyncClient(follow_redirects=True, timeout=PREFLIGHT_TIMEOUT) as client:
             resp = await client.head(url)
             content_type = resp.headers.get("content-type", "")
             if "text/html" not in content_type and "text/plain" not in content_type:

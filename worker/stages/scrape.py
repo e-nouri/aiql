@@ -5,6 +5,7 @@ from bs4 import BeautifulSoup
 from valkey.asyncio import Valkey
 
 from api.models import ScrapeResult, StepEvent
+from config import SCRAPE_TIMEOUT
 from worker.helpers import publish, store_step
 
 
@@ -14,7 +15,7 @@ async def scrape(vk: Valkey, job_id: str, url: str) -> ScrapeResult | None:
         message="Fetching URL...",
     ))
     try:
-        async with httpx.AsyncClient(follow_redirects=True, timeout=15) as client:
+        async with httpx.AsyncClient(follow_redirects=True, timeout=SCRAPE_TIMEOUT) as client:
             start = time.monotonic()
             resp = await client.get(url)
             elapsed = time.monotonic() - start

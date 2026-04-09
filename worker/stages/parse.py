@@ -2,6 +2,7 @@ from bs4 import BeautifulSoup
 from valkey.asyncio import Valkey
 
 from api.models import ParseResult, ScrapeResult, StepEvent
+from config import MAX_OUTBOUND_LINKS
 from worker.helpers import publish, store_step
 
 
@@ -46,7 +47,7 @@ async def parse(vk: Valkey, job_id: str, scrape: ScrapeResult, ctx: dict) -> Par
         links = []
         for a in full_soup.find_all("a", href=True):
             href = a["href"]
-            if href.startswith("http") and len(links) < 10:
+            if href.startswith("http") and len(links) < MAX_OUTBOUND_LINKS:
                 links.append(href)
 
         result = ParseResult(
