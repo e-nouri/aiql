@@ -65,13 +65,41 @@ async def _scrape(vk: Valkey, job_id: str, url: str) -> ScrapeResult | None:
         message="Fetching URL...",
     ))
     try:
-        # TODO: real httpx + BS4
-        await asyncio.sleep(0.5)
+        async with httpx.AsyncClient(follow_redirects=True, timeout=15) as client:
+            start = time.monotonic()
+            resp = await client.get(url)
+            elapsed = time.monotonic() - start
+
+        await _publish(vk, job_id, StepEvent(
+            job_id=job_id, step="scrape", status="progress",
+            message=f"Fetched in {elapsed:.2f}s — parsing HTML...",
+        ))
+
+        soup = BeautifulSoup(resp.text, "html.parser")
+
+        title_tag = soup.find("title")
+        title = title_tag.get_text(strip=True) if title_tag else None
+
+        # Remove script/style before extracting text
+        for tag in soup(["script", "style", "noscript"]):
+            tag.decompose()
+        text_content = soup.get_text(separator=" ", strip=True)
+
         result = ScrapeResult(
-            final_url=url, status_code=200,
-            title="Dummy Title", text_content="Dummy content for testing.",
+            final_url=str(resp.url),
+            status_code=resp.status_code,
+            title=title,
+            text_content=text_content,
         )
         await _store_step(vk, job_id, "scrape", result)
+
+        # Store metadata for scoring step
+        await vk.hset(f"job:{job_id}:results", mapping={
+            "_response_time": str(elapsed),
+            "_raw_html_len": str(len(resp.text)),
+            "_redirect_count": str(len(resp.history)),
+            "_original_url": url,
+        })
         await _publish(vk, job_id, StepEvent(
             job_id=job_id, step="scrape", status="completed",
             message="Scrape complete", payload=result,
