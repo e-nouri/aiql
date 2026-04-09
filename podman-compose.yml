@@ -1,0 +1,34 @@
+version: "3.8"
+
+services:
+  valkey:
+    image: valkey/valkey:8-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  api:
+    build:
+      context: .
+      dockerfile: api/Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - VALKEY_URL=valkey://valkey:6379
+    depends_on:
+      valkey:
+        condition: service_healthy
+
+  worker:
+    build:
+      context: .
+      dockerfile: worker/Dockerfile
+    environment:
+      - VALKEY_URL=valkey://valkey:6379
+    depends_on:
+      valkey:
+        condition: service_healthy
