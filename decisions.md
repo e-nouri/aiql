@@ -93,6 +93,10 @@ URLs are validated before any HTTP request is made. The current checks cover the
 - DNS resolution verified — hostname must resolve
 - Private/reserved IPs blocked (SSRF protection: `127.x`, `10.x`, `172.16-31.x`, `192.168.x`, `169.254.x`, `::1`)
 
+**robots.txt:** Fetched and parsed during preflight using `urllib.robotparser`. If the target path is disallowed for our user-agent, a warning event is emitted to the client — but the pipeline continues. This is a deliberate choice: the enrichment service is informational, not a crawler that hammers sites repeatedly, so a hard block isn't warranted. If robots.txt is missing (404) or the fetch fails, scraping proceeds silently.
+
+**User-Agent:** All outgoing HTTP requests (preflight HEAD, robots.txt GET, scrape GET) identify themselves with a configurable `User-Agent` header (`AiQL/1.0` by default). This is both polite and required by many sites that check for bot identification.
+
 **Not covered (would add in production):**
 - DNS rebinding attacks
 - URL redirect chains landing on internal IPs after initial resolution
