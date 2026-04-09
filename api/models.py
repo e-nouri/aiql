@@ -1,3 +1,5 @@
+from enum import StrEnum
+
 from pydantic import BaseModel, HttpUrl, ConfigDict
 from typing import Literal
 
@@ -46,8 +48,26 @@ class ScoreResult(BaseModel):
     signals: ScoreSignals
 
 
-StepName = Literal["preflight", "scrape", "parse", "score"]
-StepStatus = Literal["started", "progress", "completed", "error"]
+class StepName(StrEnum):
+    PREFLIGHT = "preflight"
+    SCRAPE = "scrape"
+    PARSE = "parse"
+    SCORE = "score"
+
+
+class StepStatus(StrEnum):
+    STARTED = "started"
+    PROGRESS = "progress"
+    COMPLETED = "completed"
+    ERROR = "error"
+
+
+class JobState(StrEnum):
+    QUEUED = "queued"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    REJECTED = "rejected"
 
 
 class StepEvent(BaseModel):
@@ -73,7 +93,7 @@ class EnrichResult(BaseModel):
 class JobStatus(BaseModel):
     job_id: str
     url: str
-    status: Literal["queued", "running", "completed", "failed", "rejected"]
+    status: JobState
     result: EnrichResult | None = None
     # debug: intermediate step results
     scrape: ScrapeResult | None = None
