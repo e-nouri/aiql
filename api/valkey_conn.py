@@ -1,7 +1,6 @@
-import os
 from valkey.asyncio import Valkey
 
-VALKEY_URL = os.getenv("VALKEY_URL", "valkey://localhost:6379")
+from config import VALKEY_URL
 
 _pool: Valkey | None = None
 

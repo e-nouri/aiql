@@ -10,7 +10,8 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, StreamingResponse
 
 from api.models import EnrichRequest, JobStatus, StepEvent
-from api.valkey_conn import VALKEY_URL, close_valkey, get_valkey
+from api.valkey_conn import close_valkey, get_valkey
+from config import VALKEY_URL
 
 _arq_pool = None
 
