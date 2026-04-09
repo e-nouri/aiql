@@ -6,7 +6,7 @@ from arq import create_pool
 from arq.connections import RedisSettings
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, StreamingResponse
 
 from api.models import EnrichRequest, JobStatus, StepEvent
@@ -100,10 +100,16 @@ async def get_job(job_id: str):
     vk = await get_valkey()
     data = await vk.hgetall(f"job:{job_id}:results")
     if not data:
-        return {"error": "job not found"}, 404
+        raise HTTPException(status_code=404, detail="job not found")
 
-    for key in ("scrape", "parse", "score"):
-        if key in data:
-            data[key] = json.loads(data[key])
+    # Parse JSON fields, skip internal metadata keys
+    clean = {}
+    for key, val in data.items():
+        if key.startswith("_"):
+            continue
+        if key in ("scrape", "parse", "score", "result"):
+            clean[key] = json.loads(val)
+        else:
+            clean[key] = val
 
-    return JobStatus.model_validate(data)
+    return JobStatus.model_validate(clean)
