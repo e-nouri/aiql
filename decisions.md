@@ -92,6 +92,7 @@ URLs are validated before any HTTP request is made. The current checks cover the
 - Base64-encoded content in path or query rejected
 - DNS resolution verified — hostname must resolve
 - Private/reserved IPs blocked (SSRF protection: `127.x`, `10.x`, `172.16-31.x`, `192.168.x`, `169.254.x`, `::1`)
+- Post-redirect SSRF check — after following redirects, the final URL's hostname is re-validated against the private IP list (both in preflight HEAD and scrape GET, since servers can redirect differently per method)
 
 **robots.txt:** Fetched and parsed during preflight using `urllib.robotparser`. If the target path is disallowed for our user-agent, a warning event is emitted to the client — but the pipeline continues. This is a deliberate choice: the enrichment service is informational, not a crawler that hammers sites repeatedly, so a hard block isn't warranted. If robots.txt is missing (404) or the fetch fails, scraping proceeds silently.
 
@@ -99,7 +100,7 @@ URLs are validated before any HTTP request is made. The current checks cover the
 
 **Not covered (would add in production):**
 - DNS rebinding attacks
-- URL redirect chains landing on internal IPs after initial resolution
+- Intermediate redirect hops landing on internal IPs (only the final URL is checked)
 - Rate limiting per IP / per session
 - Request size limits on responses
 - Timeout-based DoS protection beyond httpx defaults
