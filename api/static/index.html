@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AiQl — URL Enrichment</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace;
+            background: #0a0a0a;
+            color: #e0e0e0;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 3rem 1rem;
+        }
+        h1 { font-size: 1.5rem; margin-bottom: 1.5rem; color: #fff; }
+        form {
+            display: flex;
+            gap: 0.5rem;
+            width: 100%;
+            max-width: 600px;
+            margin-bottom: 2rem;
+        }
+        input[type="url"] {
+            flex: 1;
+            padding: 0.6rem 1rem;
+            border: 1px solid #333;
+            border-radius: 6px;
+            background: #141414;
+            color: #e0e0e0;
+            font-size: 0.95rem;
+            outline: none;
+        }
+        input[type="url"]:focus { border-color: #555; }
+        button {
+            padding: 0.6rem 1.2rem;
+            border: none;
+            border-radius: 6px;
+            background: #2563eb;
+            color: #fff;
+            font-size: 0.95rem;
+            cursor: pointer;
+        }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+        #events {
+            width: 100%;
+            max-width: 600px;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+        .event {
+            padding: 0.6rem 1rem;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            font-family: monospace;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+        .event.started { background: #1a1a2e; border-left: 3px solid #3b82f6; }
+        .event.progress { background: #1a1a2e; border-left: 3px solid #a855f7; }
+        .event.completed { background: #0f2a1a; border-left: 3px solid #22c55e; }
+        .event.error { background: #2a0f0f; border-left: 3px solid #ef4444; }
+        .event.done { background: #1a1a1a; border-left: 3px solid #888; }
+        .step-label { color: #888; font-size: 0.75rem; text-transform: uppercase; }
+        #result {
+            width: 100%;
+            max-width: 600px;
+            margin-top: 1rem;
+            padding: 1rem;
+            border-radius: 6px;
+            background: #111;
+            border: 1px solid #333;
+            display: none;
+        }
+        #result h2 { font-size: 1rem; margin-bottom: 0.5rem; color: #22c55e; }
+        #result pre { font-size: 0.85rem; white-space: pre-wrap; }
+    </style>
+</head>
+<body>
+    <h1>AiQl — URL Enrichment</h1>
+    <form id="form">
+        <input type="url" id="url" placeholder="https://example.com" required />
+        <button type="submit" id="btn">Enrich</button>
+    </form>
+    <div id="events"></div>
+    <div id="result">
+        <h2>Result</h2>
+        <pre id="result-json"></pre>
+    </div>
+
+    <script>
+        const form = document.getElementById("form");
+        const btn = document.getElementById("btn");
+        const urlInput = document.getElementById("url");
+        const eventsDiv = document.getElementById("events");
+        const resultDiv = document.getElementById("result");
+        const resultJson = document.getElementById("result-json");
+
+        form.addEventListener("submit", async (e) => {
+            e.preventDefault();
+            eventsDiv.innerHTML = "";
+            resultDiv.style.display = "none";
+            btn.disabled = true;
+            btn.textContent = "Running...";
+
+            try {
+                const res = await fetch("/enrich", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ url: urlInput.value }),
+                });
+                const { job_id } = await res.json();
+
+                const source = new EventSource(`/enrich/${job_id}/stream`);
+
+                source.addEventListener("step", (e) => {
+                    const data = JSON.parse(e.data);
+                    const div = document.createElement("div");
+                    div.className = `event ${data.status}`;
+
+                    if (data.done) {
+                        div.className = "event done";
+                        div.textContent = "Pipeline complete";
+                        eventsDiv.appendChild(div);
+                        source.close();
+                        fetchResult(job_id);
+                        return;
+                    }
+
+                    let text = `[${data.step}] ${data.message}`;
+                    if (data.payload) {
+                        text += "\n" + JSON.stringify(data.payload, null, 2);
+                    }
+                    div.textContent = text;
+                    eventsDiv.appendChild(div);
+                    div.scrollIntoView({ behavior: "smooth" });
+                });
+
+                source.onerror = () => {
+                    source.close();
+                    btn.disabled = false;
+                    btn.textContent = "Enrich";
+                };
+            } catch (err) {
+                btn.disabled = false;
+                btn.textContent = "Enrich";
+                const div = document.createElement("div");
+                div.className = "event error";
+                div.textContent = `Error: ${err.message}`;
+                eventsDiv.appendChild(div);
+            }
+        });
+
+        async function fetchResult(jobId) {
+            try {
+                const res = await fetch(`/enrich/${jobId}`);
+                const data = await res.json();
+                resultJson.textContent = JSON.stringify(data, null, 2);
+                resultDiv.style.display = "block";
+            } catch (err) {
+                resultJson.textContent = `Failed to fetch result: ${err.message}`;
+                resultDiv.style.display = "block";
+            }
+            btn.disabled = false;
+            btn.textContent = "Enrich";
+        }
+    </script>
+</body>
+</html>
