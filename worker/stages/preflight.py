@@ -7,7 +7,7 @@ from valkey.asyncio import Valkey
 from api.models import JobState, StepEvent, StepName, StepStatus
 from config import PREFLIGHT_TIMEOUT, USER_AGENT
 from worker.helpers import publish
-from worker.validation import sanitize_url
+from worker.validation import resolves_to_private_ip, sanitize_url
 
 
 async def _check_robots(client: httpx.AsyncClient, url: str) -> bool:
@@ -55,6 +55,18 @@ async def preflight(vk: Valkey, job_id: str, url: str) -> bool:
                 ))
 
             resp = await client.head(url)
+
+            # Post-redirect SSRF check: final URL may differ from original
+            final_host = urlparse(str(resp.url)).hostname
+            private_ip = resolves_to_private_ip(final_host) if final_host else None
+            if private_ip:
+                await vk.hset(f"job:{job_id}:results", "status", JobState.REJECTED)
+                await publish(vk, job_id, StepEvent(
+                    job_id=job_id, step=StepName.PREFLIGHT, status=StepStatus.ERROR,
+                    message=f"redirect landed on private IP {private_ip}",
+                ))
+                return False
+
             content_type = resp.headers.get("content-type", "")
             if "text/html" not in content_type and "text/plain" not in content_type:
                 await vk.hset(f"job:{job_id}:results", "status", JobState.REJECTED)

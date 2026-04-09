@@ -1,4 +1,5 @@
 import time
+from urllib.parse import urlparse
 
 import httpx
 from bs4 import BeautifulSoup
@@ -7,6 +8,7 @@ from valkey.asyncio import Valkey
 from api.models import ScrapeResult, StepEvent, StepName, StepStatus
 from config import SCRAPE_TIMEOUT, USER_AGENT
 from worker.helpers import publish, store_step
+from worker.validation import resolves_to_private_ip
 
 
 async def scrape(vk: Valkey, job_id: str, url: str) -> ScrapeResult | None:
@@ -22,6 +24,16 @@ async def scrape(vk: Valkey, job_id: str, url: str) -> ScrapeResult | None:
             start = time.monotonic()
             resp = await client.get(url)
             elapsed = time.monotonic() - start
+
+            # Post-redirect SSRF check
+            final_host = urlparse(str(resp.url)).hostname
+            private_ip = resolves_to_private_ip(final_host) if final_host else None
+            if private_ip:
+                await publish(vk, job_id, StepEvent(
+                    job_id=job_id, step=StepName.SCRAPE, status=StepStatus.ERROR,
+                    message=f"redirect landed on private IP {private_ip}",
+                ))
+                return None
 
         await publish(vk, job_id, StepEvent(
             job_id=job_id, step=StepName.SCRAPE, status=StepStatus.PROGRESS,

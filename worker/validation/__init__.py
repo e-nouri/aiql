@@ -1,3 +1,3 @@
-from worker.validation.url_sanitization import sanitize_url
+from worker.validation.url_sanitization import resolves_to_private_ip, sanitize_url
 
-__all__ = ["sanitize_url"]
+__all__ = ["resolves_to_private_ip", "sanitize_url"]

@@ -23,6 +23,23 @@ PRIVATE_NETWORKS = [
 ]
 
 
+def resolves_to_private_ip(hostname: str) -> str | None:
+    """Check if hostname resolves to a private/reserved IP.
+
+    Returns the offending IP as a string, or None if all addresses are public.
+    """
+    try:
+        infos = socket.getaddrinfo(hostname, None)
+    except socket.gaierror:
+        return None
+    for info in infos:
+        ip = ipaddress.ip_address(info[4][0])
+        for network in PRIVATE_NETWORKS:
+            if ip in network:
+                return str(ip)
+    return None
+
+
 def sanitize_url(url: str) -> str | None:
     """Validate URL for security. Returns rejection reason or None if clean."""
 
@@ -57,16 +74,16 @@ def sanitize_url(url: str) -> str | None:
         return "base64-encoded content in URL"
 
     # 7. DNS resolution
+    if not parsed.hostname:
+        return "missing hostname"
     try:
-        infos = socket.getaddrinfo(parsed.hostname, None)
+        socket.getaddrinfo(parsed.hostname, None)
     except socket.gaierror:
         return f"hostname '{parsed.hostname}' does not resolve"
 
     # 8. Private IP block
-    for info in infos:
-        ip = ipaddress.ip_address(info[4][0])
-        for network in PRIVATE_NETWORKS:
-            if ip in network:
-                return f"resolves to private IP {ip}"
+    private_ip = resolves_to_private_ip(parsed.hostname)
+    if private_ip:
+        return f"resolves to private IP {private_ip}"
 
     return None
