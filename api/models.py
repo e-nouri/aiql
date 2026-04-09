@@ -29,6 +29,7 @@ class ScoreSignals(BaseModel):
     has_title: bool = False
     has_meta_description: bool = False
     not_gated: bool = False
+    js_gated: bool = False
     good_text_density: bool = False
     language_confident: bool = False
     good_stopword_ratio: bool = False
