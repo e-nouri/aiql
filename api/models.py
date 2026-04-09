@@ -57,10 +57,23 @@ class StepEvent(BaseModel):
     done: bool = False
 
 
+class EnrichResult(BaseModel):
+    job_id: str
+    url: str
+    word_count: int
+    i18n: str | None = None
+    meta_description: str | None = None
+    links: list[str] = []
+    job_score: int
+    job_rationale: str
+
+
 class JobStatus(BaseModel):
     job_id: str
     url: str
-    status: Literal["queued", "running", "completed", "failed"]
+    status: Literal["queued", "running", "completed", "failed", "rejected"]
+    result: EnrichResult | None = None
+    # debug: intermediate step results
     scrape: ScrapeResult | None = None
     parse: ParseResult | None = None
     score: ScoreResult | None = None
