@@ -1,4 +1,4 @@
-from api.models import EnrichResult, StepEvent
+from api.models import EnrichResult, JobState, StepEvent, StepName, StepStatus
 from worker.helpers import get_valkey, publish
 from worker.scoring import score
 from worker.stages import preflight, scrape, parse
@@ -8,7 +8,7 @@ async def run_pipeline(ctx: dict, job_id: str, url: str) -> None:
     vk = await get_valkey()
 
     try:
-        await vk.hset(f"job:{job_id}:results", "status", "running")
+        await vk.hset(f"job:{job_id}:results", "status", JobState.RUNNING)
 
         # Pre-flight
         accepted = await preflight(vk, job_id, url)
@@ -32,15 +32,15 @@ async def run_pipeline(ctx: dict, job_id: str, url: str) -> None:
             job_rationale=score_result.rationale if score_result else "pipeline failed",
         )
         await vk.hset(f"job:{job_id}:results", "result", enriched.model_dump_json())
-        await vk.hset(f"job:{job_id}:results", "status", "completed")
+        await vk.hset(f"job:{job_id}:results", "status", JobState.COMPLETED)
 
     except Exception as e:
-        await vk.hset(f"job:{job_id}:results", "status", "failed")
+        await vk.hset(f"job:{job_id}:results", "status", JobState.FAILED)
 
     finally:
         # Always emit done
         await publish(vk, job_id, StepEvent(
-            job_id=job_id, step="score", status="completed",
+            job_id=job_id, step=StepName.SCORE, status=StepStatus.COMPLETED,
             message="Pipeline finished", done=True,
         ))
         await vk.aclose()
