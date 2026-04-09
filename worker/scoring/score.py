@@ -1,6 +1,6 @@
 from valkey.asyncio import Valkey
 
-from api.models import ParseResult, ScoreResult, ScrapeResult, StepEvent
+from api.models import ParseResult, ScoreResult, ScrapeResult, StepEvent, StepName, StepStatus
 from worker.helpers import publish, store_step
 from worker.scoring.rationale import build_rationale
 from worker.scoring.signals import compute_signals
@@ -8,14 +8,14 @@ from worker.scoring.signals import compute_signals
 
 async def score(vk: Valkey, job_id: str, scrape: ScrapeResult | None, parse: ParseResult | None, ctx: dict) -> ScoreResult | None:
     await publish(vk, job_id, StepEvent(
-        job_id=job_id, step="score", status="started",
+        job_id=job_id, step=StepName.SCORE, status=StepStatus.STARTED,
         message="Running heuristics...",
     ))
     try:
         meta = await vk.hgetall(f"job:{job_id}:results")
 
         await publish(vk, job_id, StepEvent(
-            job_id=job_id, step="score", status="progress",
+            job_id=job_id, step=StepName.SCORE, status=StepStatus.PROGRESS,
             message="Computing signals...",
         ))
 
@@ -36,13 +36,13 @@ async def score(vk: Valkey, job_id: str, scrape: ScrapeResult | None, parse: Par
         result = ScoreResult(score=final_score, rationale=rationale, signals=signals)
         await store_step(vk, job_id, "score", result)
         await publish(vk, job_id, StepEvent(
-            job_id=job_id, step="score", status="completed",
+            job_id=job_id, step=StepName.SCORE, status=StepStatus.COMPLETED,
             message=f"Score: {final_score}/100 — {rationale}", payload=result,
         ))
         return result
     except Exception as e:
         await publish(vk, job_id, StepEvent(
-            job_id=job_id, step="score", status="error",
+            job_id=job_id, step=StepName.SCORE, status=StepStatus.ERROR,
             message=str(e),
         ))
         return None
