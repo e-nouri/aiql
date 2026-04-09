@@ -25,7 +25,27 @@ from config import (
     TFIDF_DOMINANCE_THRESHOLD,
     TFIDF_MIN_WORDS,
 )
+from nltk.corpus import stopwords as nltk_stopwords
 from worker.helpers import publish, store_step
+
+# Map lingua ISO 639-1 codes to NLTK language names
+_NLTK_LANG_MAP = {
+    "ar": "arabic", "az": "azerbaijani", "da": "danish", "de": "german",
+    "el": "greek", "en": "english", "es": "spanish", "fi": "finnish",
+    "fr": "french", "hu": "hungarian", "id": "indonesian", "it": "italian",
+    "kk": "kazakh", "nb": "norwegian", "nl": "dutch", "pt": "portuguese",
+    "ro": "romanian", "ru": "russian", "sl": "slovene", "sv": "swedish",
+    "tg": "tajik", "tr": "turkish",
+}
+
+
+def _get_stopwords(lang_code: str | None) -> set[str]:
+    """Get NLTK stopwords for the detected language, fallback to English."""
+    lang = _NLTK_LANG_MAP.get(lang_code, "english")
+    try:
+        return set(nltk_stopwords.words(lang))
+    except OSError:
+        return set(nltk_stopwords.words("english"))
 
 JS_REQUIRED_RE = re.compile(
     r"enable\s+(javascript|js)"
@@ -103,10 +123,12 @@ def compute_signals(
     if parse and parse.language_confidence is not None:
         signals.language_confident = parse.language_confidence > LANGUAGE_CONFIDENCE_THRESHOLD
 
-    # 11. Stopword ratio
+    # 11. Stopword ratio (using NLTK for detected language)
     words = text.lower().split()
     if words:
-        stop_count = sum(1 for w in words if w in STOPWORDS)
+        lang_code = parse.language if parse else None
+        sw = _get_stopwords(lang_code)
+        stop_count = sum(1 for w in words if w in sw)
         ratio = stop_count / len(words)
         signals.good_stopword_ratio = STOPWORD_RATIO_MIN <= ratio <= STOPWORD_RATIO_MAX
 
