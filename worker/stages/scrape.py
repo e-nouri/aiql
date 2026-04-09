@@ -4,14 +4,14 @@ import httpx
 from bs4 import BeautifulSoup
 from valkey.asyncio import Valkey
 
-from api.models import ScrapeResult, StepEvent
+from api.models import ScrapeResult, StepEvent, StepName, StepStatus
 from config import SCRAPE_TIMEOUT
 from worker.helpers import publish, store_step
 
 
 async def scrape(vk: Valkey, job_id: str, url: str) -> ScrapeResult | None:
     await publish(vk, job_id, StepEvent(
-        job_id=job_id, step="scrape", status="started",
+        job_id=job_id, step=StepName.SCRAPE, status=StepStatus.STARTED,
         message="Fetching URL...",
     ))
     try:
@@ -21,7 +21,7 @@ async def scrape(vk: Valkey, job_id: str, url: str) -> ScrapeResult | None:
             elapsed = time.monotonic() - start
 
         await publish(vk, job_id, StepEvent(
-            job_id=job_id, step="scrape", status="progress",
+            job_id=job_id, step=StepName.SCRAPE, status=StepStatus.PROGRESS,
             message=f"Fetched in {elapsed:.2f}s — parsing HTML...",
         ))
 
@@ -52,13 +52,13 @@ async def scrape(vk: Valkey, job_id: str, url: str) -> ScrapeResult | None:
             "_original_url": url,
         })
         await publish(vk, job_id, StepEvent(
-            job_id=job_id, step="scrape", status="completed",
+            job_id=job_id, step=StepName.SCRAPE, status=StepStatus.COMPLETED,
             message="Scrape complete", payload=result,
         ))
         return result
     except Exception as e:
         await publish(vk, job_id, StepEvent(
-            job_id=job_id, step="scrape", status="error",
+            job_id=job_id, step=StepName.SCRAPE, status=StepStatus.ERROR,
             message=str(e),
         ))
         return None
