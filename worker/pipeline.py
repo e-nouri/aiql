@@ -112,7 +112,7 @@ async def _scrape(vk: Valkey, job_id: str, url: str) -> ScrapeResult | None:
         return None
 
 
-async def _parse(vk: Valkey, job_id: str, scrape: ScrapeResult) -> ParseResult | None:
+async def _parse(vk: Valkey, job_id: str, scrape: ScrapeResult, ctx: dict) -> ParseResult | None:
     await _publish(vk, job_id, StepEvent(
         job_id=job_id, step="parse", status="started",
         message="Extracting metadata...",
@@ -126,9 +126,8 @@ async def _parse(vk: Valkey, job_id: str, scrape: ScrapeResult) -> ParseResult |
             message=f"Word count: {word_count} — detecting language...",
         ))
 
-        # Language detection
-        from lingua import LanguageDetectorBuilder
-        detector = LanguageDetectorBuilder.from_all_languages().build()
+        # Language detection (pre-loaded in ctx)
+        detector = ctx["lingua"]
         confidence_values = detector.compute_language_confidence_values(scrape.text_content)
         if confidence_values:
             best = confidence_values[0]
@@ -182,6 +181,7 @@ def _compute_signals(
     scrape: ScrapeResult | None,
     parse: ParseResult | None,
     meta: dict,
+    ctx: dict,
 ) -> ScoreSignals:
     signals = ScoreSignals()
     if not scrape:
@@ -258,11 +258,9 @@ def _compute_signals(
         # If the most frequent word is > 10% of all words, it dominates
         signals.balanced_tfidf = (max_freq / len(words)) < 0.10
 
-    # 13. NER entity count (uses spaCy — loaded at warmup)
+    # 13. NER entity count (pre-loaded in ctx)
     try:
-        import spacy
-        nlp = spacy.load("xx_ent_wiki_sm", disable=["tagger", "parser", "senter", "attribute_ruler", "lemmatizer"])
-        # Limit text length to avoid slow processing
+        nlp = ctx["nlp"]
         doc = nlp(text[:5000])
         signals.has_entities = len(doc.ents) > 0
     except Exception:
@@ -300,7 +298,7 @@ def _lowest_rationale(signals: ScoreSignals) -> str:
     return "; ".join(issues[:3])
 
 
-async def _score(vk: Valkey, job_id: str, scrape: ScrapeResult | None, parse: ParseResult | None) -> ScoreResult | None:
+async def _score(vk: Valkey, job_id: str, scrape: ScrapeResult | None, parse: ParseResult | None, ctx: dict) -> ScoreResult | None:
     await _publish(vk, job_id, StepEvent(
         job_id=job_id, step="score", status="started",
         message="Running heuristics...",
@@ -313,7 +311,7 @@ async def _score(vk: Valkey, job_id: str, scrape: ScrapeResult | None, parse: Pa
             message="Computing signals...",
         ))
 
-        signals = _compute_signals(scrape, parse, meta)
+        signals = _compute_signals(scrape, parse, meta, ctx)
 
         # Calculate score: sum boolean signals + outbound_link_score, normalize to 0-100
         bool_signals = [
@@ -356,8 +354,8 @@ async def run_pipeline(ctx: dict, job_id: str, url: str) -> None:
 
         # Pipeline steps — continue even if a step fails
         scrape = await _scrape(vk, job_id, url)
-        parse = await _parse(vk, job_id, scrape) if scrape else None
-        score = await _score(vk, job_id, scrape, parse)
+        parse = await _parse(vk, job_id, scrape, ctx) if scrape else None
+        score = await _score(vk, job_id, scrape, parse, ctx)
 
         # Build final result
         enriched = EnrichResult(
