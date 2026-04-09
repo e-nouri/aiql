@@ -1,5 +1,6 @@
 import json
 import uuid
+from contextlib import asynccontextmanager
 
 from arq import create_pool
 from arq.connections import RedisSettings
@@ -8,8 +9,6 @@ from fastapi.responses import HTMLResponse, StreamingResponse
 
 from api.models import EnrichRequest, JobStatus, StepEvent
 from api.valkey_conn import VALKEY_URL, close_valkey, get_valkey
-
-app = FastAPI(title="AiQl Enrichment Pipeline")
 
 _arq_pool = None
 
@@ -20,17 +19,17 @@ def _redis_settings() -> RedisSettings:
     return RedisSettings(host=host, port=int(port))
 
 
-@app.on_event("startup")
-async def startup():
+@asynccontextmanager
+async def lifespan(app: FastAPI):
     global _arq_pool
     _arq_pool = await create_pool(_redis_settings())
-
-
-@app.on_event("shutdown")
-async def shutdown():
+    yield
     await close_valkey()
     if _arq_pool:
         await _arq_pool.aclose()
+
+
+app = FastAPI(title="AiQl Enrichment Pipeline", lifespan=lifespan)
 
 
 @app.get("/", response_class=HTMLResponse)
