@@ -1,6 +1,7 @@
 from api.models import EnrichResult, StepEvent
 from worker.helpers import get_valkey, publish
-from worker.stages import preflight, scrape, parse, score
+from worker.scoring import score
+from worker.stages import preflight, scrape, parse
 
 
 async def run_pipeline(ctx: dict, job_id: str, url: str) -> None:
