@@ -1,10 +1,7 @@
-import os
-
 from valkey.asyncio import Valkey
 
 from api.models import StepEvent
-
-VALKEY_URL = os.getenv("VALKEY_URL", "valkey://localhost:6379")
+from config import VALKEY_URL
 
 
 async def get_valkey() -> Valkey:

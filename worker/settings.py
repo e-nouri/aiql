@@ -1,13 +1,11 @@
 import logging
-import os
 
 from arq.connections import RedisSettings
 
+from config import VALKEY_URL
 from worker.pipeline import run_pipeline
 
 logger = logging.getLogger(__name__)
-
-VALKEY_URL = os.getenv("VALKEY_URL", "valkey://localhost:6379")
 
 
 def _redis_settings() -> RedisSettings:
