@@ -30,7 +30,8 @@ JS_REQUIRED_RE = re.compile(
 
 GATING_RE = re.compile(
     r"captcha"
-    r"|cloudflare"
+    r"|cloudflare.{0,20}challenge"
+    r"|cf-browser-verification"
     r"|access\s+denied"
     r"|403\s+forbidden"
     r"|login\s+required",
