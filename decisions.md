@@ -21,6 +21,9 @@ Valkey handles three roles with one container:
 | Job queue | arq internals | arq default queues |
 | Live streaming | Pub/Sub | `job:{id}:events` |
 | Result store | Hash + TTL | `job:{id}:results` |
+
+**Note:** Raw HTML is stored temporarily in Valkey for cross-step access (parse reads it from scrape). Valkey does not support compression natively. In production, this should either be compressed in Python before storing (`zlib`), capped at a max size, or eliminated by extracting all needed data during scrape and not persisting raw HTML at all.
+
 ## Containers: Podman Compose (not single process)
 
 3 containers: `api`, `worker`, `valkey`. Frontend is served as static HTML by the API container.
