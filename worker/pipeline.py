@@ -75,6 +75,24 @@ async def _scrape(vk: Valkey, job_id: str, url: str) -> ScrapeResult | None:
 
         soup = BeautifulSoup(resp.text, "html.parser")
 
+        # Detect JS-required / ad-blocker gates before stripping tags
+        raw_lower = resp.text.lower()
+        js_gating_patterns = [
+            "please enable javascript",
+            "you need to enable javascript",
+            "javascript is required",
+            "this site requires javascript",
+            "please turn on javascript",
+            "please disable your ad",
+            "disable your ad blocker",
+            "ad blocker detected",
+            "please disable adblock",
+            "enable javascript to",
+        ]
+        noscript_tag = soup.find("noscript")
+        noscript_text = noscript_tag.get_text(strip=True) if noscript_tag else ""
+        js_gated = any(p in raw_lower or p in noscript_text.lower() for p in js_gating_patterns)
+
         title_tag = soup.find("title")
         title = title_tag.get_text(strip=True) if title_tag else None
 
@@ -98,6 +116,7 @@ async def _scrape(vk: Valkey, job_id: str, url: str) -> ScrapeResult | None:
             "_raw_html_len": str(len(resp.text)),
             "_redirect_count": str(len(resp.history)),
             "_original_url": url,
+            "_js_gated": str(js_gated),
         })
         await _publish(vk, job_id, StepEvent(
             job_id=job_id, step="scrape", status="completed",
@@ -213,9 +232,14 @@ def _compute_signals(
         signals.has_meta_description = bool(parse.meta_description)
 
     # 7. Not content-gated
+    js_gated = meta.get("_js_gated", "False") == "True"
     gating_markers = ["captcha", "cloudflare", "access denied", "403 forbidden", "login required", "subscribe"]
     lower_text = text.lower()
-    signals.not_gated = not any(m in lower_text for m in gating_markers) and scrape.status_code != 403
+    signals.not_gated = (
+        not js_gated
+        and not any(m in lower_text for m in gating_markers)
+        and scrape.status_code != 403
+    )
 
     # 8. Text-to-HTML density
     if raw_html_len > 0:
@@ -274,13 +298,17 @@ def _compute_signals(
     return signals
 
 
-def _lowest_rationale(signals: ScoreSignals) -> str:
+def _lowest_rationale(signals: ScoreSignals, meta: dict) -> str:
     """Generate rationale from the worst signals."""
     issues = []
     if not signals.http_ok:
         issues.append("non-200 status")
     if not signals.not_gated:
-        issues.append("content gated")
+        js_gated = meta.get("_js_gated", "False") == "True"
+        if js_gated:
+            issues.append("page requires JavaScript")
+        else:
+            issues.append("content gated")
     if not signals.good_text_density:
         issues.append("low text density")
     if not signals.has_title:
@@ -324,7 +352,7 @@ async def _score(vk: Valkey, job_id: str, scrape: ScrapeResult | None, parse: Pa
         raw = sum(1 for s in bool_signals if s) + signals.outbound_link_score
         score = round((raw / 14) * 100)
 
-        rationale = _lowest_rationale(signals)
+        rationale = _lowest_rationale(signals, meta)
 
         result = ScoreResult(score=score, rationale=rationale, signals=signals)
         await _store_step(vk, job_id, "score", result)
