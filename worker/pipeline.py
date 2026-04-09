@@ -93,9 +93,10 @@ async def _scrape(vk: Valkey, job_id: str, url: str) -> ScrapeResult | None:
         )
         await _store_step(vk, job_id, "scrape", result)
 
-        # Store metadata for scoring step
+        # Store metadata for parse + scoring steps
         await vk.hset(f"job:{job_id}:results", mapping={
             "_response_time": str(elapsed),
+            "_raw_html": resp.text,
             "_raw_html_len": str(len(resp.text)),
             "_redirect_count": str(len(resp.history)),
             "_original_url": url,
@@ -119,11 +120,51 @@ async def _parse(vk: Valkey, job_id: str, scrape: ScrapeResult) -> ParseResult |
         message="Extracting metadata...",
     ))
     try:
-        # TODO: real parsing
-        await asyncio.sleep(0.5)
+        words = scrape.text_content.split()
+        word_count = len(words)
+
+        await _publish(vk, job_id, StepEvent(
+            job_id=job_id, step="parse", status="progress",
+            message=f"Word count: {word_count} — detecting language...",
+        ))
+
+        # Language detection
+        from lingua import LanguageDetectorBuilder
+        detector = LanguageDetectorBuilder.from_all_languages().build()
+        confidence_values = detector.compute_language_confidence_values(scrape.text_content)
+        if confidence_values:
+            best = confidence_values[0]
+            language = best.language.iso_code_639_1.name.lower()
+            language_confidence = best.value
+        else:
+            language = None
+            language_confidence = None
+
+        await _publish(vk, job_id, StepEvent(
+            job_id=job_id, step="parse", status="progress",
+            message=f"Language: {language} ({language_confidence:.2f}) — extracting links...",
+        ))
+
+        # Meta description + links from raw HTML stored during scrape
+        raw_html = await vk.hget(f"job:{job_id}:results", "_raw_html")
+        full_soup = BeautifulSoup(raw_html, "html.parser")
+
+        meta_tag = full_soup.find("meta", attrs={"name": "description"})
+        meta_description = meta_tag["content"] if meta_tag and meta_tag.get("content") else None
+
+        # Outbound links (up to 10)
+        links = []
+        for a in full_soup.find_all("a", href=True):
+            href = a["href"]
+            if href.startswith("http") and len(links) < 10:
+                links.append(href)
+
         result = ParseResult(
-            word_count=5, language="en", language_confidence=0.99,
-            meta_description="A dummy page", outbound_links=[],
+            word_count=word_count,
+            language=language,
+            language_confidence=language_confidence,
+            meta_description=meta_description,
+            outbound_links=links,
         )
         await _store_step(vk, job_id, "parse", result)
         await _publish(vk, job_id, StepEvent(
