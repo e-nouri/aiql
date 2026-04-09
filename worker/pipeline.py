@@ -1,6 +1,9 @@
 import asyncio
 import os
+import time
 
+import httpx
+from bs4 import BeautifulSoup
 from valkey.asyncio import Valkey
 
 from api.models import (
@@ -28,18 +31,32 @@ async def _store_step(vk: Valkey, job_id: str, key: str, result) -> None:
 
 
 async def _preflight(vk: Valkey, job_id: str, url: str) -> bool:
-    """Check MIME type — reject non-HTML content."""
+    """Check MIME type via HEAD — reject non-HTML content."""
     await _publish(vk, job_id, StepEvent(
         job_id=job_id, step="preflight", status="started",
         message="Checking MIME type...",
     ))
-    # TODO: real HEAD request + MIME check
-    await asyncio.sleep(0.2)
-    await _publish(vk, job_id, StepEvent(
-        job_id=job_id, step="preflight", status="completed",
-        message="text/html — accepted",
-    ))
-    return True
+    try:
+        async with httpx.AsyncClient(follow_redirects=True, timeout=10) as client:
+            resp = await client.head(url)
+            content_type = resp.headers.get("content-type", "")
+            if "text/html" not in content_type and "text/plain" not in content_type:
+                await _publish(vk, job_id, StepEvent(
+                    job_id=job_id, step="preflight", status="error",
+                    message=f"Rejected: {content_type} — not supported yet",
+                ))
+                return False
+        await _publish(vk, job_id, StepEvent(
+            job_id=job_id, step="preflight", status="completed",
+            message=f"{content_type.split(';')[0]} — accepted",
+        ))
+        return True
+    except Exception as e:
+        await _publish(vk, job_id, StepEvent(
+            job_id=job_id, step="preflight", status="error",
+            message=f"Preflight failed: {e}",
+        ))
+        return False
 
 
 async def _scrape(vk: Valkey, job_id: str, url: str) -> ScrapeResult | None:
