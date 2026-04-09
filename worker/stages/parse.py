@@ -33,7 +33,7 @@ async def parse(vk: Valkey, job_id: str, scrape: ScrapeResult, ctx: dict) -> Par
 
         await publish(vk, job_id, StepEvent(
             job_id=job_id, step=StepName.PARSE, status=StepStatus.PROGRESS,
-            message=f"Language: {language} ({language_confidence:.2f}) — extracting links...",
+            message=f"Language: {language} ({language_confidence or 0:.2f}) — extracting links...",
         ))
 
         # Meta description + links from raw HTML stored during scrape
