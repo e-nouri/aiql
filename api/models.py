@@ -32,6 +32,7 @@ class ScoreSignals(BaseModel):
     js_gated: bool = False
     good_text_density: bool = False
     language_confident: bool = False
+    i18n_supported: bool = False
     good_stopword_ratio: bool = False
     normal_entropy: bool = False
     balanced_tfidf: bool = False
