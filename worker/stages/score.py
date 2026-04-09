@@ -10,14 +10,22 @@ from api.models import (
     ScrapeResult,
     StepEvent,
 )
+from config import (
+    ENTROPY_MAX,
+    ENTROPY_MIN,
+    FAST_RESPONSE_THRESHOLD,
+    LANGUAGE_CONFIDENCE_THRESHOLD,
+    LINK_SCORE_MAX,
+    LINK_SCORE_MULTIPLIER,
+    MAX_REDIRECT_CHAIN,
+    NER_TEXT_LIMIT,
+    STOPWORD_RATIO_MAX,
+    STOPWORD_RATIO_MIN,
+    TEXT_DENSITY_THRESHOLD,
+    TFIDF_DOMINANCE_THRESHOLD,
+    TFIDF_MIN_WORDS,
+)
 from worker.helpers import publish, store_step
-
-STOPWORDS = {
-    "the", "a", "an", "is", "are", "was", "were", "in", "on", "at", "to", "for",
-    "of", "and", "or", "but", "not", "with", "it", "this", "that", "be", "as",
-    "de", "la", "le", "et", "en", "les", "des", "un", "une", "du", "el", "y",
-    "der", "die", "das", "und", "in", "von", "zu", "den", "mit",
-}
 
 JS_REQUIRED_RE = re.compile(
     r"enable\s+(javascript|js)"
@@ -63,10 +71,10 @@ def compute_signals(
     signals.no_redirect = str(scrape.final_url).rstrip("/") == original_url.rstrip("/")
 
     # 3. Short redirect chain
-    signals.short_redirect_chain = redirect_count <= 1
+    signals.short_redirect_chain = redirect_count <= MAX_REDIRECT_CHAIN
 
     # 4. Fast response
-    signals.fast_response = response_time < 2.0
+    signals.fast_response = response_time < FAST_RESPONSE_THRESHOLD
 
     # 5. Has title
     signals.has_title = bool(scrape.title)
@@ -89,18 +97,18 @@ def compute_signals(
     # 9. Text-to-HTML density
     if raw_html_len > 0:
         density = len(text) / raw_html_len
-        signals.good_text_density = density > 0.5
+        signals.good_text_density = density > TEXT_DENSITY_THRESHOLD
 
     # 10. Language confidence
     if parse and parse.language_confidence is not None:
-        signals.language_confident = parse.language_confidence > 0.8
+        signals.language_confident = parse.language_confidence > LANGUAGE_CONFIDENCE_THRESHOLD
 
     # 11. Stopword ratio
     words = text.lower().split()
     if words:
         stop_count = sum(1 for w in words if w in STOPWORDS)
         ratio = stop_count / len(words)
-        signals.good_stopword_ratio = 0.25 <= ratio <= 0.50
+        signals.good_stopword_ratio = STOPWORD_RATIO_MIN <= ratio <= STOPWORD_RATIO_MAX
 
     # 12. Shannon entropy
     if text:
@@ -109,20 +117,20 @@ def compute_signals(
             freq[ch] = freq.get(ch, 0) + 1
         total = len(text)
         entropy = -sum((c / total) * math.log2(c / total) for c in freq.values())
-        signals.normal_entropy = 3.0 <= entropy <= 5.5
+        signals.normal_entropy = ENTROPY_MIN <= entropy <= ENTROPY_MAX
 
     # 13. Term frequency balance
-    if words and len(words) > 10:
+    if words and len(words) > TFIDF_MIN_WORDS:
         word_freq = {}
         for w in words:
             word_freq[w] = word_freq.get(w, 0) + 1
         max_freq = max(word_freq.values())
-        signals.balanced_tfidf = (max_freq / len(words)) < 0.10
+        signals.balanced_tfidf = (max_freq / len(words)) < TFIDF_DOMINANCE_THRESHOLD
 
     # 14. NER entity count (pre-loaded in ctx)
     try:
         nlp = ctx["nlp"]
-        doc = nlp(text[:5000])
+        doc = nlp(text[:NER_TEXT_LIMIT])
         signals.has_entities = len(doc.ents) > 0
     except Exception:
         signals.has_entities = False
@@ -130,7 +138,7 @@ def compute_signals(
     # 15. Outbound links
     if parse:
         link_count = len(parse.outbound_links)
-        signals.outbound_link_score = min(link_count * 0.1, 1.0)
+        signals.outbound_link_score = min(link_count * LINK_SCORE_MULTIPLIER, LINK_SCORE_MAX)
 
     return signals
 
