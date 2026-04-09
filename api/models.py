@@ -49,6 +49,7 @@ class ScoreResult(BaseModel):
 
 
 class StepName(StrEnum):
+    VALIDATE = "validate"
     PREFLIGHT = "preflight"
     SCRAPE = "scrape"
     PARSE = "parse"
