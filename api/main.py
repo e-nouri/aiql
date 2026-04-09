@@ -4,8 +4,10 @@ from contextlib import asynccontextmanager
 
 from arq import create_pool
 from arq.connections import RedisSettings
+from pathlib import Path
+
 from fastapi import FastAPI
-from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse
 
 from api.models import EnrichRequest, JobStatus, StepEvent
 from api.valkey_conn import VALKEY_URL, close_valkey, get_valkey
@@ -32,9 +34,12 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="AiQl Enrichment Pipeline", lifespan=lifespan)
 
 
-@app.get("/", response_class=HTMLResponse)
+STATIC_DIR = Path(__file__).parent / "static"
+
+
+@app.get("/")
 async def index():
-    return "<h1>AiQl</h1><p>Coming soon</p>"
+    return FileResponse(STATIC_DIR / "index.html")
 
 
 @app.post("/enrich")
