@@ -42,10 +42,6 @@ async def _preflight(vk: Valkey, job_id: str, url: str) -> bool:
             content_type = resp.headers.get("content-type", "")
             if "text/html" not in content_type and "text/plain" not in content_type:
                 await vk.hset(f"job:{job_id}:results", "status", "rejected")
-                await _publish(vk, job_id, StepEvent(
-                    job_id=job_id, step="preflight", status="error",
-                    message=f"Rejected: {content_type} — not supported yet",
-                ))
                 return False
         await _publish(vk, job_id, StepEvent(
             job_id=job_id, step="preflight", status="completed",
