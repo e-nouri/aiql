@@ -1,0 +1,9 @@
+fastapi>=0.115.0
+uvicorn>=0.34.0
+pydantic>=2.10.0
+httpx>=0.28.0
+beautifulsoup4>=4.13.0
+arq>=0.26.0
+valkey>=6.1.0
+spacy>=3.8.0
+lingua-language-detector>=2.1.0
