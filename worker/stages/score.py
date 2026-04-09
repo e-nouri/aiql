@@ -123,10 +123,11 @@ def compute_signals(
     if parse and parse.language_confidence is not None:
         signals.language_confident = parse.language_confidence > LANGUAGE_CONFIDENCE_THRESHOLD
 
-    # 11. Stopword ratio (using NLTK for detected language)
+    # 11. i18n support + Stopword ratio
     words = text.lower().split()
-    if words:
-        lang_code = parse.language if parse else None
+    lang_code = parse.language if parse else None
+    signals.i18n_supported = lang_code in _NLTK_LANG_MAP
+    if words and signals.i18n_supported:
         sw = _get_stopwords(lang_code)
         stop_count = sum(1 for w in words if w in sw)
         ratio = stop_count / len(words)
@@ -181,6 +182,8 @@ def build_rationale(signals: ScoreSignals) -> str:
         issues.append("no title")
     if not signals.has_entities:
         issues.append("no entities detected")
+    if not signals.i18n_supported:
+        issues.append("i18n not supported")
     if not signals.language_confident:
         issues.append("low language confidence")
     if not signals.normal_entropy:
