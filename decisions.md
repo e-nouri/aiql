@@ -78,3 +78,26 @@ The score reflects how well the extraction went, not content quality in an edito
 | **Links** | 14 | Outbound links (0.1 × count, max 1) | 0–1 |
 
 **Total max: 14 → normalized to 0–100**
+
+## Security: URL Sanitization (not exhaustive)
+
+URLs are validated before any HTTP request is made. The current checks cover the most common attack vectors but are **not exhaustive** — this is an exercise, not a production security audit.
+
+**Current checks:**
+- Scheme restricted to `http` / `https`
+- URL length capped at 2048 chars
+- Non-standard ports rejected (only 80/443 allowed)
+- Credentials in URL rejected (`user:pass@host`)
+- Sensitive query params blocked (`password`, `token`, `api_key`, `access_token`, etc.)
+- Base64-encoded content in path or query rejected
+- DNS resolution verified — hostname must resolve
+- Private/reserved IPs blocked (SSRF protection: `127.x`, `10.x`, `172.16-31.x`, `192.168.x`, `169.254.x`, `::1`)
+
+**Not covered (would add in production):**
+- DNS rebinding attacks
+- URL redirect chains landing on internal IPs after initial resolution
+- Rate limiting per IP / per session
+- Request size limits on responses
+- Timeout-based DoS protection beyond httpx defaults
+- IPv6 edge cases
+- URL normalization attacks (e.g., `http://127.0.0.1` vs `http://0x7f000001`)
