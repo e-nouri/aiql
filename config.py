@@ -3,6 +3,9 @@ import os
 # Valkey
 VALKEY_URL = os.getenv("VALKEY_URL", "valkey://localhost:6379")
 
+# Identity
+USER_AGENT = os.getenv("USER_AGENT", "AiQL/1.0 (URL enrichment bot; +https://github.com/nourix2/aiql)")
+
 # HTTP timeouts (seconds)
 PREFLIGHT_TIMEOUT = int(os.getenv("PREFLIGHT_TIMEOUT", "10"))
 SCRAPE_TIMEOUT = int(os.getenv("SCRAPE_TIMEOUT", "15"))
