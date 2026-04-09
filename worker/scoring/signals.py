@@ -60,9 +60,9 @@ def compute_signals(
     if signals.js_gated:
         return signals
 
-    # 8. Not content-gated
+    # 8. Not content-gated (check visible text, not raw HTML)
     signals.not_gated = (
-        not GATING_RE.search(raw_html)
+        not GATING_RE.search(text)
         and scrape.status_code != 403
     )
 
