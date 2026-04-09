@@ -2,6 +2,16 @@
 
 **Time limit:** 30 minutes | **Stack:** FastAPI · Pydantic v2 · your choice of queue and pub/sub
 
+## How to Run
+
+```bash
+git clone https://github.com/e-nouri/aiql.git
+cd aiql
+podman-compose up --build
+```
+
+Then open [http://localhost:8000](http://localhost:8000)
+
 ---
 
 ## Overview
