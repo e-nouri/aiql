@@ -1,4 +1,5 @@
 import math
+import re
 
 from valkey.asyncio import Valkey
 
@@ -18,6 +19,20 @@ STOPWORDS = {
     "der", "die", "das", "und", "in", "von", "zu", "den", "mit",
 }
 
+GATING_RE = re.compile(
+    r"enable\s+(javascript|js)"
+    r"|javascript\s+(is\s+)?required"
+    r"|requires?\s+javascript"
+    r"|disable\s+(your\s+)?(ad\s*block|ad\s+blocker)"
+    r"|ad\s*block\w*\s+detected"
+    r"|captcha"
+    r"|cloudflare"
+    r"|access\s+denied"
+    r"|403\s+forbidden"
+    r"|login\s+required",
+    re.IGNORECASE,
+)
+
 
 def compute_signals(
     scrape: ScrapeResult | None,
@@ -30,6 +45,7 @@ def compute_signals(
         return signals
 
     text = scrape.text_content
+    raw_html = meta.get("_raw_html", "")
     raw_html_len = int(meta.get("_raw_html_len", "0"))
     response_time = float(meta.get("_response_time", "999"))
     redirect_count = int(meta.get("_redirect_count", "0"))
@@ -54,13 +70,9 @@ def compute_signals(
     if parse:
         signals.has_meta_description = bool(parse.meta_description)
 
-    # 7. Not content-gated
-    js_gated = meta.get("_js_gated", "False") == "True"
-    gating_markers = ["captcha", "cloudflare", "access denied", "403 forbidden", "login required", "subscribe"]
-    lower_text = text.lower()
+    # 7. Not content-gated (check raw HTML to catch noscript content)
     signals.not_gated = (
-        not js_gated
-        and not any(m in lower_text for m in gating_markers)
+        not GATING_RE.search(raw_html)
         and scrape.status_code != 403
     )
 
@@ -113,17 +125,13 @@ def compute_signals(
     return signals
 
 
-def build_rationale(signals: ScoreSignals, meta: dict) -> str:
+def build_rationale(signals: ScoreSignals) -> str:
     """Generate rationale from the worst signals."""
     issues = []
     if not signals.http_ok:
         issues.append("non-200 status")
     if not signals.not_gated:
-        js_gated = meta.get("_js_gated", "False") == "True"
-        if js_gated:
-            issues.append("page requires JavaScript")
-        else:
-            issues.append("content gated")
+        issues.append("content gated")
     if not signals.good_text_density:
         issues.append("low text density")
     if not signals.has_title:
@@ -166,7 +174,7 @@ async def score(vk: Valkey, job_id: str, scrape: ScrapeResult | None, parse: Par
         raw = sum(1 for s in bool_signals if s) + signals.outbound_link_score
         final_score = round((raw / 14) * 100)
 
-        rationale = build_rationale(signals, meta)
+        rationale = build_rationale(signals)
 
         result = ScoreResult(score=final_score, rationale=rationale, signals=signals)
         await store_step(vk, job_id, "score", result)
