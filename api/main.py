@@ -42,6 +42,11 @@ async def index():
     return FileResponse(STATIC_DIR / "index.html")
 
 
+@app.get("/favicon.ico")
+async def favicon():
+    return FileResponse(STATIC_DIR / "favicon.ico")
+
+
 @app.post("/enrich")
 async def enrich(req: EnrichRequest):
     job_id = str(uuid.uuid4())
