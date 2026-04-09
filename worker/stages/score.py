@@ -19,13 +19,17 @@ STOPWORDS = {
     "der", "die", "das", "und", "in", "von", "zu", "den", "mit",
 }
 
-GATING_RE = re.compile(
+JS_REQUIRED_RE = re.compile(
     r"enable\s+(javascript|js)"
     r"|javascript\s+(is\s+)?required"
     r"|requires?\s+javascript"
     r"|disable\s+(your\s+)?(ad\s*block|ad\s+blocker)"
-    r"|ad\s*block\w*\s+detected"
-    r"|captcha"
+    r"|ad\s*block\w*\s+detected",
+    re.IGNORECASE,
+)
+
+GATING_RE = re.compile(
+    r"captcha"
     r"|cloudflare"
     r"|access\s+denied"
     r"|403\s+forbidden"
@@ -70,29 +74,34 @@ def compute_signals(
     if parse:
         signals.has_meta_description = bool(parse.meta_description)
 
-    # 7. Not content-gated (check raw HTML to catch noscript content)
+    # 7. JS required — if true, nothing else counts
+    signals.js_gated = bool(JS_REQUIRED_RE.search(raw_html))
+    if signals.js_gated:
+        return signals
+
+    # 8. Not content-gated
     signals.not_gated = (
         not GATING_RE.search(raw_html)
         and scrape.status_code != 403
     )
 
-    # 8. Text-to-HTML density
+    # 9. Text-to-HTML density
     if raw_html_len > 0:
         density = len(text) / raw_html_len
         signals.good_text_density = density > 0.5
 
-    # 9. Language confidence
+    # 10. Language confidence
     if parse and parse.language_confidence is not None:
         signals.language_confident = parse.language_confidence > 0.8
 
-    # 10. Stopword ratio
+    # 11. Stopword ratio
     words = text.lower().split()
     if words:
         stop_count = sum(1 for w in words if w in STOPWORDS)
         ratio = stop_count / len(words)
         signals.good_stopword_ratio = 0.25 <= ratio <= 0.50
 
-    # 11. Shannon entropy
+    # 12. Shannon entropy
     if text:
         freq = {}
         for ch in text:
@@ -101,7 +110,7 @@ def compute_signals(
         entropy = -sum((c / total) * math.log2(c / total) for c in freq.values())
         signals.normal_entropy = 3.0 <= entropy <= 5.5
 
-    # 12. Term frequency balance
+    # 13. Term frequency balance
     if words and len(words) > 10:
         word_freq = {}
         for w in words:
@@ -109,7 +118,7 @@ def compute_signals(
         max_freq = max(word_freq.values())
         signals.balanced_tfidf = (max_freq / len(words)) < 0.10
 
-    # 13. NER entity count (pre-loaded in ctx)
+    # 14. NER entity count (pre-loaded in ctx)
     try:
         nlp = ctx["nlp"]
         doc = nlp(text[:5000])
@@ -117,7 +126,7 @@ def compute_signals(
     except Exception:
         signals.has_entities = False
 
-    # 14. Outbound links
+    # 15. Outbound links
     if parse:
         link_count = len(parse.outbound_links)
         signals.outbound_link_score = min(link_count * 0.1, 1.0)
@@ -127,6 +136,9 @@ def compute_signals(
 
 def build_rationale(signals: ScoreSignals) -> str:
     """Generate rationale from the worst signals."""
+    if signals.js_gated:
+        return "page requires JavaScript"
+
     issues = []
     if not signals.http_ok:
         issues.append("non-200 status")
