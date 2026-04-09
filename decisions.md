@@ -23,7 +23,7 @@ Valkey handles three roles with one container:
 | Result store | Hash + TTL | `job:{id}:results` |
 ## Containers: Podman Compose (not single process)
 
-4 containers: `api`, `worker`, `valkey`, `frontend`.
+3 containers: `api`, `worker`, `valkey`. Frontend is served as static HTML by the API container.
 
 A single-process blob with in-memory queues works for a demo but breaks the moment you need to scale workers independently or survive an API restart without losing in-flight jobs. Containers add ~30 seconds of setup (`podman-compose up`) and give proper separation for free.
 
@@ -53,7 +53,7 @@ The spec says "no framework, no build step." A single HTML page at `GET /` that 
 
 **Update:** Dropped the Next.js + shadcn/ui plan. One less container, zero JS build complexity.
 
-## Scoring: 15-signal heuristic (not AI-based)
+## Scoring: 14-signal heuristic (not AI-based)
 
 The score reflects how well the extraction went, not content quality in an editorial sense. All signals are deterministic and computed locally — no external API calls.
 
