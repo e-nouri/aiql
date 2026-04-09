@@ -7,3 +7,4 @@ arq>=0.26.0
 valkey>=6.1.0
 spacy>=3.8.0
 lingua-language-detector>=2.1.0
+nltk>=3.9.0
