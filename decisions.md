@@ -1,5 +1,9 @@
 # Design Decisions
 
+## Scope: Exercise (not a product)
+
+This is a take-home coding exercise — not a POC, not an MVP, not production. Single user, no auth, no tests, no CI. The focus is on demonstrating architecture and engineering decisions, not shipping software. Containers are included not for production readiness but because they make it trivial for the evaluator to run the solution: `podman-compose up` and it works.
+
 ## API: REST + SSE (not GraphQL + WebSockets)
 
 The task spec defines `POST /enrich` — keeping it as REST stays true to the spec and avoids unnecessary complexity. SSE is simpler than WebSockets for this use case: the data flows one direction (server → client), SSE auto-reconnects natively, and it works over plain HTTP with no upgrade handshake.
@@ -38,6 +42,10 @@ All scoring and analysis runs locally. No reliance on LLMs, no structured output
 **Language detection:** `lingua-py` — lightest and most accurate option. Alternatives like `langdetect` are unreliable on short texts, and `fasttext` requires a ~126MB model download. lingua is pure Python, no external model files, and handles short extracted content well.
 
 **Warm-up:** Both the NER model and lingua detector are loaded and warmed up on worker startup (before accepting jobs). First inference is slow due to lazy initialization — running a dummy prediction at boot eliminates that cold-start penalty from real jobs.
+
+## HTTP Client: Native `fetch` (not Axios)
+
+The frontend uses the browser's native `fetch` API. No Axios — recent supply chain compromise ([axios/axios#10604](https://github.com/axios/axios/issues/10604), [details](https://www.stepsecurity.io/blog/axios-compromised-on-npm-malicious-versions-drop-remote-access-trojan)). `fetch` is built into every modern browser, has no dependencies, and is sufficient for SSE via `EventSource`.
 
 ## Frontend: Minimal HTML served by FastAPI (not Next.js)
 
