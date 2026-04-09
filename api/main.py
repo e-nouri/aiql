@@ -9,7 +9,7 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, StreamingResponse
 
-from api.models import EnrichRequest, JobStatus, StepEvent
+from api.models import EnrichRequest, JobState, JobStatus, StepEvent
 from api.valkey_conn import close_valkey, get_valkey
 from config import VALKEY_URL
 
@@ -56,7 +56,7 @@ async def enrich(req: EnrichRequest):
     await vk.hset(f"job:{job_id}:results", mapping={
         "job_id": job_id,
         "url": str(req.url),
-        "status": "queued",
+        "status": JobState.QUEUED,
     })
 
     await _arq_pool.enqueue_job("run_pipeline", job_id, str(req.url))
