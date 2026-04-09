@@ -2,15 +2,19 @@
 
 **Time limit:** 30 minutes | **Stack:** FastAPI · Pydantic v2 · your choice of queue and pub/sub
 
-## How to Run
+## Deliverable
+
+Requires [Podman](https://podman.io/docs/installation) or [Docker](https://docs.docker.com/get-docker/).
 
 ```bash
 git clone https://github.com/e-nouri/aiql.git
 cd aiql
-podman-compose up --build
+podman-compose up --build   # or docker compose up --build
 ```
 
 Then open [http://localhost:8000](http://localhost:8000)
+
+See also: [Design Decisions](decisions.md) | [End-to-End Design](e2e_design.md)
 
 ---
 
@@ -56,11 +60,3 @@ A minimal HTML page at `GET /` — no framework, no build step — that submits 
 ### Pydantic models
 
 Define typed models for: request input, each step's result, the streaming event payload, and the aggregate job status. No raw `dict` on the critical path.
-
----
-
-## Deliverable
-
-A public GitHub repo runnable with `pip install -r requirements.txt` + `uvicorn main:app --reload`.
-
-`README.md` with setup steps, your tech choices, and any trade-offs made under time pressure.
