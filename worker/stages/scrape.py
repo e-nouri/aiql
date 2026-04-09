@@ -7,19 +7,6 @@ from valkey.asyncio import Valkey
 from api.models import ScrapeResult, StepEvent
 from worker.helpers import publish, store_step
 
-JS_GATING_PATTERNS = [
-    "please enable javascript",
-    "you need to enable javascript",
-    "javascript is required",
-    "this site requires javascript",
-    "please turn on javascript",
-    "please disable your ad",
-    "disable your ad blocker",
-    "ad blocker detected",
-    "please disable adblock",
-    "enable javascript to",
-]
-
 
 async def scrape(vk: Valkey, job_id: str, url: str) -> ScrapeResult | None:
     await publish(vk, job_id, StepEvent(
@@ -38,12 +25,6 @@ async def scrape(vk: Valkey, job_id: str, url: str) -> ScrapeResult | None:
         ))
 
         soup = BeautifulSoup(resp.text, "html.parser")
-
-        # Detect JS-required / ad-blocker gates before stripping tags
-        raw_lower = resp.text.lower()
-        noscript_tag = soup.find("noscript")
-        noscript_text = noscript_tag.get_text(strip=True) if noscript_tag else ""
-        js_gated = any(p in raw_lower or p in noscript_text.lower() for p in JS_GATING_PATTERNS)
 
         title_tag = soup.find("title")
         title = title_tag.get_text(strip=True) if title_tag else None
@@ -68,7 +49,6 @@ async def scrape(vk: Valkey, job_id: str, url: str) -> ScrapeResult | None:
             "_raw_html_len": str(len(resp.text)),
             "_redirect_count": str(len(resp.history)),
             "_original_url": url,
-            "_js_gated": str(js_gated),
         })
         await publish(vk, job_id, StepEvent(
             job_id=job_id, step="scrape", status="completed",
